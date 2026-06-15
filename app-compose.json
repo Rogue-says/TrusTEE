@@ -1,0 +1,10 @@
+{
+  "name": "tee-escrow-agent",
+  "version": "2.0.0",
+  "services": [{
+    "name": "agent",
+    "image": "tee-escrow-agent:latest",
+    "env": ["MANTLE_RPC_URL", "ESCROW_CONTRACT_ADDRESS", "REPUTATION_REGISTRY_ADDRESS", "MIN_REPUTATION", "AGENT_SALT", "PORT", "DAILY_LIMIT"],
+    "ports": ["3000:3000"]
+  }]
+}

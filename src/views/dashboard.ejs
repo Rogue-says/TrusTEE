@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TEEscrow Agent Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1400px; margin: 20px auto; padding: 20px; background: #f5f7fb; }
+        h1 { color: #1a56db; }
+        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .status { border-left: 4px solid #10b981; }
+        .flex { display: flex; gap: 20px; flex-wrap: wrap; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; }
+        input, button { padding: 8px 12px; margin: 5px 0; border-radius: 6px; border: 1px solid #cbd5e1; }
+        button { background: #1a56db; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0e3a8a; }
+        .api-link { margin-top: 15px; }
+        canvas { max-height: 300px; }
+    </style>
+</head>
+<body>
+    <h1>\u{1F916} TEEscrow Agent</h1>
+    <div class="grid">
+        <div class="card status">
+            <h2>Agent Status</h2>
+            <p><strong>Wallet:</strong> <code><%= agentAddress %></code></p>
+            <p><strong>Balance:</strong> <%= balanceMNT.toFixed(4) %> MNT</p>
+            <p><strong>Daily limit:</strong> <%= dailyLimit %> MNT (spent today: <%= dailySpent %> MNT)</p>
+            <p><strong>Min reputation:</strong> <%= minReputation %></p>
+            <p id="live-status">\u{1F7E2} Running</p>
+        </div>
+        <div class="card">
+            <h2>Spending Limit</h2>
+            <input type="number" id="limitInput" placeholder="New daily limit (MNT)" step="0.1">
+            <button onclick="setLimit()">Set Limit</button>
+            <p id="limitResult"></p>
+        </div>
+        <div class="card">
+            <h2>Spending Chart (Last 7 days)</h2>
+            <canvas id="spendingChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Escrows</h2>
+        <table>
+            <thead><tr><th>ID</th><th>Buyer</th><th>Seller</th><th>Amount (MNT)</th><th>Status</th></tr></thead>
+            <tbody>
+                <% escrows.forEach(e => { %>
+                <tr>
+                    <td><%= e.id %></td>
+                    <td><%= e[0] %></td>
+                    <td><%= e[1] %></td>
+                    <td><%= (Number(e[2])/1e18).toFixed(4) %></td>
+                    <td><%= e[3] ? '\u2705 Released' : (e[4] ? '\u274C Refunded' : '\u23F3 Pending') %></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Submit Delivery Proof</h2>
+        <form id="proofForm">
+            <input type="number" id="escrowId" placeholder="Escrow ID" required><br>
+            <input type="text" id="signature" placeholder="Signature (0x...)" required><br>
+            <input type="text" id="deliveryHash" placeholder="Delivery hash (optional)"><br>
+            <button type="submit">Release Funds</button>
+        </form>
+        <div id="proofResult"></div>
+    </div>
+
+    <div class="card api-link">
+        <h2>API Endpoints</h2>
+        <ul>
+            <li><a href="/status">/status</a></li>
+            <li><a href="/wallet">/wallet</a></li>
+            <li><a href="/escrows">/escrows</a></li>
+            <li><a href="/spending-stats">/spending-stats</a></li>
+            <li><a href="/attestation">/attestation</a></li>
+        </ul>
+    </div>
+
+    <script>
+        async function loadChart() {
+            const res = await fetch('/spending-stats');
+            const data = await res.json();
+            const ctx = document.getElementById('spendingChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'MNT Released',
+                        data: data.totals,
+                        backgroundColor: '#1a56db'
+                    }]
+                }
+            });
+        }
+        loadChart();
+
+        async function setLimit() {
+            const limit = parseFloat(document.getElementById('limitInput').value);
+            if (isNaN(limit)) return;
+            const res = await fetch('/set-limit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit })
+            });
+            const result = await res.json();
+            document.getElementById('limitResult').innerText = result.success ? `Limit set to ${result.limit} MNT` : `Error: ${result.error}`;
+            if (result.success) location.reload();
+        }
+
+        document.getElementById('proofForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const escrowId = document.getElementById('escrowId').value;
+            const signature = document.getElementById('signature').value;
+            const deliveryHash = document.getElementById('deliveryHash').value;
+            const res = await fetch('/delivery-proof', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ escrowId: parseInt(escrowId), signature, deliveryHash })
+            });
+            const result = await res.json();
+            document.getElementById('proofResult').innerHTML = result.success ? 
+                `<p style="color:green">\u2705 Released! Tx: ${result.txHash}</p>` : 
+                `<p style="color:red">\u274C ${result.error}</p>`;
+            if (result.success) setTimeout(() => location.reload(), 2000);
+        });
+
+        setInterval(async () => {
+            const res = await fetch('/status');
+            const data = await res.json();
+            document.getElementById('live-status').innerHTML = `\u{1F7E2} Running | Balance: ${data.balanceMNT.toFixed(4)} MNT | Daily spent: ${data.dailySpent} / ${data.dailyLimit}`;
+        }, 10000);
+    </script>
+</body>
+</html>
