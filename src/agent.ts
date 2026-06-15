@@ -4,11 +4,16 @@ const mantleSepolia = mantleSepoliaTestnet;
 import { getTeeWallet } from './teeClient.js';
 import { getSellerReputation } from './reputation.js';
 
-const ESCROW_ADDRESS = process.env.ESCROW_CONTRACT_ADDRESS as `0x${string}`;
-const publicClient = createPublicClient({
-  chain: mantleSepolia,
-  transport: http(process.env.MANTLE_RPC_URL!)
-});
+function getEscrowAddress(): `0x${string}` {
+  return process.env.ESCROW_CONTRACT_ADDRESS as `0x${string}`;
+}
+
+function getPublicClient() {
+  return createPublicClient({
+    chain: mantleSepolia,
+    transport: http(process.env.MANTLE_RPC_URL!)
+  });
+}
 
 const escrowAbi = [
   { inputs: [{ name: 'id', type: 'uint256' }], name: 'release', outputs: [], stateMutability: 'nonpayable', type: 'function' },
@@ -26,9 +31,16 @@ const escrowAbi = [
 
 const NULL_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-let dailyLimit = parseFloat(process.env.DAILY_LIMIT || '100');
+let dailyLimit: number | null = null;
 let dailyReleasedTotal = 0;
 let lastResetDate = new Date().toDateString();
+
+function getDailyLimitValue(): number {
+  if (dailyLimit === null) {
+    dailyLimit = parseFloat(process.env.DAILY_LIMIT || '100');
+  }
+  return dailyLimit;
+}
 
 function resetDailyTotalIfNeeded() {
   const today = new Date().toDateString();
@@ -46,7 +58,7 @@ export async function setDailyLimit(limitMNT: number) {
 
 export async function getDailyLimit(): Promise<number> {
   resetDailyTotalIfNeeded();
-  return dailyLimit;
+  return getDailyLimitValue();
 }
 
 export async function getDailySpent(): Promise<number> {
@@ -56,8 +68,8 @@ export async function getDailySpent(): Promise<number> {
 
 export async function getEscrowDetails(id: number) {
   try {
-    const escrow = await publicClient.readContract({
-      address: ESCROW_ADDRESS,
+    const escrow = await getPublicClient().readContract({
+      address: getEscrowAddress(),
       abi: escrowAbi,
       functionName: 'getEscrow',
       args: [BigInt(id)]
@@ -99,13 +111,14 @@ export async function releaseEscrow(id: number, signature: string, deliveryHash:
   if (!meetsThreshold) return { success: false, error: `Reputation too low: ${score}` };
 
   const amountMNT = Number(amount) / 1e18;
-  if (dailyReleasedTotal + amountMNT > dailyLimit)
-    return { success: false, error: `Daily spending limit exceeded (limit: ${dailyLimit} MNT)` };
+  const limit = getDailyLimitValue();
+  if (dailyReleasedTotal + amountMNT > limit)
+    return { success: false, error: `Daily spending limit exceeded (limit: ${limit} MNT)` };
 
   try {
     const { walletClient } = await getTeeWallet();
     const hash = await walletClient.writeContract({
-      address: ESCROW_ADDRESS,
+      address: getEscrowAddress(),
       abi: escrowAbi,
       functionName: 'release',
       args: [BigInt(id)]
@@ -131,9 +144,10 @@ export async function getSpendingStats(): Promise<{ labels: string[]; totals: nu
 }
 
 export async function startEventListener() {
-  console.log(`\u{1F442} Listening for escrow events on ${ESCROW_ADDRESS}...`);
-  publicClient.watchContractEvent({
-    address: ESCROW_ADDRESS,
+  const address = getEscrowAddress();
+  console.log(`\u{1F442} Listening for escrow events on ${address}...`);
+  getPublicClient().watchContractEvent({
+    address,
     abi: escrowAbi,
     eventName: 'EscrowCreated',
     onLogs: (logs) => {

@@ -56,6 +56,7 @@ cp .env.example .env
 | `AGENT_SALT` | Salt for TEE key derivation (keep secret) |
 | `PORT` | HTTP server port (default: 3000) |
 | `DAILY_LIMIT` | Daily spending cap in MNT (default: 100) |
+| `DEV_MODE` | Set to `true` to run locally without TEE (generates random wallet) |
 
 ### Development
 

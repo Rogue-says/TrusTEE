@@ -6,11 +6,14 @@ import { mantleSepoliaTestnet } from 'viem/chains';
 const mantleSepolia = mantleSepoliaTestnet;
 
 const router = express.Router();
-const publicClient = createPublicClient({ chain: mantleSepolia, transport: http(process.env.MANTLE_RPC_URL!) });
+
+function getPublicClient() {
+  return createPublicClient({ chain: mantleSepolia, transport: http(process.env.MANTLE_RPC_URL!) });
+}
 
 router.get('/status', async (req: Request, res: Response) => {
   const address = await getAgentAddress();
-  const balance = await publicClient.getBalance({ address: address as `0x${string}` });
+  const balance = await getPublicClient().getBalance({ address: address as `0x${string}` });
   res.json({
     status: 'running',
     agentAddress: address,
@@ -57,7 +60,7 @@ router.get('/attestation', (req: Request, res: Response) => {
 
 router.get('/', async (req: Request, res: Response) => {
   const address = await getAgentAddress();
-  const balance = await publicClient.getBalance({ address: address as `0x${string}` });
+  const balance = await getPublicClient().getBalance({ address: address as `0x${string}` });
   const escrows = await getAllEscrows();
   const dailyLimit = await getDailyLimit();
   const dailySpent = await getDailySpent();
