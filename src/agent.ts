@@ -143,6 +143,44 @@ export async function getSpendingStats(): Promise<{ labels: string[]; totals: nu
   return { labels: days, totals };
 }
 
+export async function getHistory(): Promise<any[]> {
+  try {
+    const fromBlock = await getPublicClient().getBlockNumber();
+    const logs = await getPublicClient().getContractEvents({
+      address: getEscrowAddress(),
+      abi: escrowAbi,
+      eventName: 'EscrowCreated',
+      fromBlock: fromBlock - 5000n,
+      toBlock: 'latest'
+    });
+    const history = await Promise.all(logs.reverse().map(async (log) => {
+      const { id, buyer, seller, amount, deadline, deliveryHash } = log.args as any;
+      const block = await getPublicClient().getBlock({ blockHash: log.blockHash! });
+      const escrow = await getEscrowDetails(Number(id));
+      let status = 'Pending';
+      if (escrow) {
+        const e = escrow as any;
+        if (e[3]) status = 'Released';
+        else if (e[4]) status = 'Refunded';
+      }
+      return {
+        id: Number(id),
+        buyer,
+        seller,
+        amount: (Number(amount) / 1e18).toFixed(4),
+        deadline: Number(deadline),
+        txHash: log.transactionHash,
+        timestamp: Number(block.timestamp) * 1000,
+        status
+      };
+    }));
+    return history;
+  } catch (err) {
+    console.error('Failed to fetch history:', err);
+    return [];
+  }
+}
+
 export async function startEventListener() {
   const address = getEscrowAddress();
   console.log(`\u{1F442} Listening for escrow events on ${address}...`);

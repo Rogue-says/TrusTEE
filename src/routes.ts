@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { getAgentAddress } from './teeClient.js';
-import { releaseEscrow, getAllEscrows, setDailyLimit, getDailyLimit, getDailySpent, getSpendingStats } from './agent.js';
+import { releaseEscrow, getAllEscrows, setDailyLimit, getDailyLimit, getDailySpent, getSpendingStats, getHistory } from './agent.js';
 import { createPublicClient, http } from 'viem';
 import { mantleSepoliaTestnet } from 'viem/chains';
 const mantleSepolia = mantleSepoliaTestnet;
@@ -54,6 +54,11 @@ router.get('/spending-stats', async (req: Request, res: Response) => {
   res.json(stats);
 });
 
+router.get('/history', async (req: Request, res: Response) => {
+  const history = await getHistory();
+  res.json({ history });
+});
+
 router.get('/attestation', (req: Request, res: Response) => {
   res.json({ message: 'Attestation available via Phala Cloud dashboard' });
 });
@@ -62,12 +67,14 @@ router.get('/', async (req: Request, res: Response) => {
   const address = await getAgentAddress();
   const balance = await getPublicClient().getBalance({ address: address as `0x${string}` });
   const escrows = await getAllEscrows();
+  const history = await getHistory();
   const dailyLimit = await getDailyLimit();
   const dailySpent = await getDailySpent();
   res.render('dashboard', {
     agentAddress: address,
     balanceMNT: Number(balance) / 1e18,
     escrows,
+    history,
     dailyLimit,
     dailySpent,
     minReputation: process.env.MIN_REPUTATION || '70'
