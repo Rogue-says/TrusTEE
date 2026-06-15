@@ -1,4 +1,4 @@
-# TEEscrow Agent
+# TrusTEE
 
 Autonomous escrow agent running in a Trusted Execution Environment (TEE) on Phala Cloud. Holds funds on Mantle, verifies delivery proofs, checks ERC-8004 reputation, and releases payments.
 
@@ -35,7 +35,7 @@ Autonomous escrow agent running in a Trusted Execution Environment (TEE) on Phal
 
 ```bash
 git clone <repo-url>
-cd tee-escrow-agent
+cd trustee
 npm install
 ```
 

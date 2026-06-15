@@ -1,7 +1,7 @@
 {
-  "name": "tee-escrow-agent",
+  "name": "trustee",
   "version": "2.0.0",
-  "description": "TEE-secured escrow agent with dashboard, chart & limit",
+  "description": "TrusTEE - TEE-secured escrow agent with dashboard, chart & limit",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc && cp -r src/views dist/views",
