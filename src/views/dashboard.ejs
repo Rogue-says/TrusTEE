@@ -4,89 +4,226 @@
     <title>TrusTEE Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 1400px; margin: 20px auto; padding: 20px; background: #f5f7fb; }
-        h1 { color: #1a56db; }
-        .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-        .status { border-left: 4px solid #10b981; }
-        .flex { display: flex; gap: 20px; flex-wrap: wrap; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
-        th { background: #f1f5f9; }
-        input, button { padding: 8px 12px; margin: 5px 0; border-radius: 6px; border: 1px solid #cbd5e1; }
-        button { background: #1a56db; color: white; border: none; cursor: pointer; }
-        button:hover { background: #0e3a8a; }
-        .api-link { margin-top: 15px; }
-        canvas { max-height: 300px; }
+        :root {
+            --bg: #f4f6f9;
+            --surface: #ffffff;
+            --text: #1a1d23;
+            --text-muted: #5f6b7a;
+            --border: #e2e6ed;
+            --accent: #0d7c6e;
+            --accent-hover: #095d52;
+            --accent-light: #e0f2ef;
+            --shadow: 0 1px 4px rgba(0,0,0,0.06);
+            --chart-bar: #0d7c6e;
+            --tag-bg: #eef1f5;
+        }
+        .dark {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --text: #e4e7ed;
+            --text-muted: #8b95a6;
+            --border: #2a2e3a;
+            --accent: #1abc9c;
+            --accent-hover: #16a085;
+            --accent-light: #1a2d33;
+            --shadow: 0 1px 4px rgba(0,0,0,0.4);
+            --chart-bar: #1abc9c;
+            --tag-bg: #232733;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            max-width: 1360px; margin: 0 auto; padding: 24px 20px;
+            transition: background .3s, color .3s;
+        }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+        }
+        header h1 {
+            font-size: 22px; font-weight: 700; letter-spacing: -0.3px;
+            color: var(--accent);
+        }
+        header h1 span { color: var(--text); font-weight: 300; }
+        .header-right { display: flex; align-items: center; gap: 14px; }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 13px; font-weight: 600; padding: 6px 14px;
+            border-radius: 20px; background: var(--accent-light); color: var(--accent);
+        }
+        .theme-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text); padding: 6px 14px; border-radius: 8px;
+            cursor: pointer; font-size: 15px; transition: .2s;
+        }
+        .theme-btn:hover { border-color: var(--accent); }
+
+        .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .card {
+            background: var(--surface); border-radius: 12px; padding: 20px;
+            box-shadow: var(--shadow); border: 1px solid var(--border);
+            transition: background .3s, border .3s;
+        }
+        .card h2 {
+            font-size: 14px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 14px;
+        }
+        .stat-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+        .stat-row .label { color: var(--text-muted); }
+        .stat-row .value { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .wallet-addr {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 12px; color: var(--text-muted); word-break: break-all;
+            background: var(--tag-bg); padding: 6px 10px; border-radius: 6px; margin-top: 4px;
+        }
+
+        .limit-row { display: flex; gap: 8px; margin-top: 4px; }
+        .limit-row input { flex: 1; }
+        input, button.btn {
+            padding: 8px 14px; border-radius: 8px; font-size: 14px;
+            border: 1px solid var(--border); background: var(--surface); color: var(--text);
+            transition: .2s;
+        }
+        input:focus { outline: none; border-color: var(--accent); }
+        button.btn {
+            background: var(--accent); color: #fff; border: none; font-weight: 600;
+            cursor: pointer; white-space: nowrap;
+        }
+        button.btn:hover { background: var(--accent-hover); }
+        button.btn-outline {
+            background: transparent; border: 1px solid var(--border); color: var(--text);
+        }
+        button.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+        #limitResult { font-size: 13px; margin-top: 6px; color: var(--accent); }
+
+        .chart-wrap { position: relative; height: 180px; }
+        .chart-wrap canvas { max-height: 180px; max-width: 100%; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+        th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; }
+        td { font-variant-numeric: tabular-nums; }
+        td code { font-size: 11px; color: var(--text-muted); }
+        .table-wrap { overflow-x: auto; }
+
+        .proof-form { display: flex; flex-direction: column; gap: 10px; max-width: 480px; }
+        .proof-form input { width: 100%; }
+        #proofResult { font-size: 13px; margin-top: 6px; }
+
+        .api-links { display: flex; flex-wrap: wrap; gap: 8px; }
+        .api-links a {
+            font-size: 13px; color: var(--accent); text-decoration: none;
+            padding: 4px 12px; border-radius: 6px; background: var(--tag-bg); transition: .2s;
+        }
+        .api-links a:hover { background: var(--accent-light); }
+
+        footer { text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 40px; padding: 10px 0; border-top: 1px solid var(--border); }
+
+        @media (max-width: 640px) {
+            body { padding: 16px 12px; }
+            header { flex-direction: column; align-items: flex-start; }
+            .grid3 { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <h1>\u{1F916} TrusTEE</h1>
-    <div class="grid">
-        <div class="card status">
+    <header>
+        <h1>Trus<span>TEE</span></h1>
+        <div class="header-right">
+            <span class="status-badge" id="live-status">&#9679; Running</span>
+            <button class="theme-btn" id="themeToggle" onclick="toggleTheme()">&#9790;</button>
+        </div>
+    </header>
+
+    <div class="grid3">
+        <div class="card">
             <h2>Agent Status</h2>
-            <p><strong>Wallet:</strong> <code><%= agentAddress %></code></p>
-            <p><strong>Balance:</strong> <%= balanceMNT.toFixed(4) %> MNT</p>
-            <p><strong>Daily limit:</strong> <%= dailyLimit %> MNT (spent today: <%= dailySpent %> MNT)</p>
-            <p><strong>Min reputation:</strong> <%= minReputation %></p>
-            <p id="live-status">\u{1F7E2} Running</p>
+            <div class="stat-row"><span class="label">Wallet</span></div>
+            <div class="wallet-addr"><%= agentAddress %></div>
+            <div class="stat-row" style="margin-top:10px"><span class="label">Balance</span><span class="value"><%= balanceMNT.toFixed(4) %> MNT</span></div>
+            <div class="stat-row"><span class="label">Min Reputation</span><span class="value"><%= minReputation %></span></div>
         </div>
         <div class="card">
             <h2>Spending Limit</h2>
-            <input type="number" id="limitInput" placeholder="New daily limit (MNT)" step="0.1">
-            <button onclick="setLimit()">Set Limit</button>
+            <div class="stat-row"><span class="label">Daily limit</span><span class="value"><%= dailyLimit %> MNT</span></div>
+            <div class="stat-row"><span class="label">Spent today</span><span class="value"><%= dailySpent %> MNT</span></div>
+            <div class="limit-row" style="margin-top:10px">
+                <input type="number" id="limitInput" placeholder="New limit" step="0.1">
+                <button class="btn" onclick="setLimit()">Set</button>
+            </div>
             <p id="limitResult"></p>
         </div>
         <div class="card">
-            <h2>Spending Chart (Last 7 days)</h2>
-            <canvas id="spendingChart"></canvas>
+            <h2>Spending (7 days)</h2>
+            <div class="chart-wrap">
+                <canvas id="spendingChart"></canvas>
+            </div>
         </div>
     </div>
 
     <div class="card">
         <h2>Escrows</h2>
-        <table>
-            <thead><tr><th>ID</th><th>Buyer</th><th>Seller</th><th>Amount (MNT)</th><th>Status</th></tr></thead>
-            <tbody>
-                <% escrows.forEach(e => { %>
-                <tr>
-                    <td><%= e.id %></td>
-                    <td><%= e[0] %></td>
-                    <td><%= e[1] %></td>
-                    <td><%= (Number(e[2])/1e18).toFixed(4) %></td>
-                    <td><%= e[3] ? '\u2705 Released' : (e[4] ? '\u274C Refunded' : '\u23F3 Pending') %></td>
-                </tr>
-                <% }) %>
-            </tbody>
-        </table>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>ID</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                    <% escrows.forEach(e => { %>
+                    <tr>
+                        <td><%= e.id %></td>
+                        <td><code><%= e[0].slice(0,8) %>&hellip;</code></td>
+                        <td><code><%= e[1].slice(0,8) %>&hellip;</code></td>
+                        <td><%= (Number(e[2])/1e18).toFixed(4) %> MNT</td>
+                        <td><%= e[3] ? 'Released' : (e[4] ? 'Refunded' : 'Pending') %></td>
+                    </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div class="card">
         <h2>Submit Delivery Proof</h2>
-        <form id="proofForm">
-            <input type="number" id="escrowId" placeholder="Escrow ID" required><br>
-            <input type="text" id="signature" placeholder="Signature (0x...)" required><br>
-            <input type="text" id="deliveryHash" placeholder="Delivery hash (optional)"><br>
-            <button type="submit">Release Funds</button>
+        <form class="proof-form" id="proofForm">
+            <input type="number" id="escrowId" placeholder="Escrow ID" required>
+            <input type="text" id="signature" placeholder="Signature (0x...)" required>
+            <input type="text" id="deliveryHash" placeholder="Delivery hash (optional)">
+            <button class="btn" type="submit">Release Funds</button>
         </form>
         <div id="proofResult"></div>
     </div>
 
-    <div class="card api-link">
+    <div class="card">
         <h2>API Endpoints</h2>
-        <ul>
-            <li><a href="/status">/status</a></li>
-            <li><a href="/wallet">/wallet</a></li>
-            <li><a href="/escrows">/escrows</a></li>
-            <li><a href="/spending-stats">/spending-stats</a></li>
-            <li><a href="/attestation">/attestation</a></li>
-        </ul>
+        <div class="api-links">
+            <a href="/status">/status</a>
+            <a href="/wallet">/wallet</a>
+            <a href="/escrows">/escrows</a>
+            <a href="/spending-stats">/spending-stats</a>
+            <a href="/attestation">/attestation</a>
+        </div>
     </div>
 
+    <footer>TrusTEE &mdash; TEE-secured escrow agent on Mantle</footer>
+
     <script>
+        const root = document.documentElement;
+        const stored = localStorage.getItem('trustee-theme');
+        if (stored === 'dark') root.classList.add('dark');
+
+        function toggleTheme() {
+            root.classList.toggle('dark');
+            localStorage.setItem('trustee-theme', root.classList.contains('dark') ? 'dark' : 'light');
+        }
+
         async function loadChart() {
             const res = await fetch('/spending-stats');
             const data = await res.json();
+            const isDark = root.classList.contains('dark');
+            const barColor = isDark ? '#1abc9c' : '#0d7c6e';
+            const gridColor = isDark ? '#2a2e3a' : '#e2e6ed';
             const ctx = document.getElementById('spendingChart').getContext('2d');
             new Chart(ctx, {
                 type: 'bar',
@@ -95,8 +232,17 @@
                     datasets: [{
                         label: 'MNT Released',
                         data: data.totals,
-                        backgroundColor: '#1a56db'
+                        backgroundColor: barColor,
+                        borderRadius: 4
                     }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#8b95a6', font: { size: 10 } }, grid: { color: gridColor } },
+                        y: { ticks: { color: '#8b95a6', font: { size: 10 } }, grid: { color: gridColor } }
+                    }
                 }
             });
         }
@@ -112,7 +258,7 @@
             });
             const result = await res.json();
             document.getElementById('limitResult').innerText = result.success ? `Limit set to ${result.limit} MNT` : `Error: ${result.error}`;
-            if (result.success) location.reload();
+            if (result.success) setTimeout(() => location.reload(), 1200);
         }
 
         document.getElementById('proofForm').addEventListener('submit', async (e) => {
@@ -126,16 +272,18 @@
                 body: JSON.stringify({ escrowId: parseInt(escrowId), signature, deliveryHash })
             });
             const result = await res.json();
-            document.getElementById('proofResult').innerHTML = result.success ? 
-                `<p style="color:green">\u2705 Released! Tx: ${result.txHash}</p>` : 
-                `<p style="color:red">\u274C ${result.error}</p>`;
+            document.getElementById('proofResult').innerHTML = result.success
+                ? `<span style="color:var(--accent)">Released &mdash; Tx: ${result.txHash}</span>`
+                : `<span style="color:#e74c3c">${result.error}</span>`;
             if (result.success) setTimeout(() => location.reload(), 2000);
         });
 
         setInterval(async () => {
-            const res = await fetch('/status');
-            const data = await res.json();
-            document.getElementById('live-status').innerHTML = `\u{1F7E2} Running | Balance: ${data.balanceMNT.toFixed(4)} MNT | Daily spent: ${data.dailySpent} / ${data.dailyLimit}`;
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                document.getElementById('live-status').innerHTML = `&#9679; Running &middot; ${data.balanceMNT.toFixed(2)} MNT &middot; ${data.dailySpent} / ${data.dailyLimit}`;
+            } catch {}
         }, 10000);
     </script>
 </body>
