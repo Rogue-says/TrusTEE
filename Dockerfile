@@ -2,7 +2,7 @@ FROM node:20-slim
 
 WORKDIR /app
 
-RUN npx skills add byreal-git/byreal-agent-skills || echo "Byreal CLI not available, continuing"
+RUN npm install -g @byreal-io/byreal-cli
 
 COPY package*.json ./
 RUN npm install --omit=dev

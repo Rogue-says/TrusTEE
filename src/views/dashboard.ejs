@@ -281,12 +281,41 @@ curl https://your-url.phala.cloud/history</pre>
                     <a href="/spending-stats">/spending-stats</a>
                     <a href="/history">/history</a>
                     <a href="/attestation">/attestation</a>
+                    <a href="/byreal/status">/byreal/status</a>
+                    <a href="/byreal/pools">/byreal/pools</a>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer>TrusTEE &mdash; TEE-secured escrow agent on Mantle &middot; <a href="#" onclick="window.ethereum?null:alert('Install MetaMask to connect your wallet')" style="color:var(--accent);text-decoration:none;">Connect wallet</a> to see your escrows</footer>
+    <div class="card">
+        <h2>Byreal Yield Deployment</h2>
+        <% if (byreal.available) { %>
+        <div class="stat-row"><span class="label">Solana Wallet</span><span class="value"><code><%= byreal.walletAddress ? byreal.walletAddress.slice(0,8)+'...' : 'Not set' %></code></span></div>
+        <div class="stat-row"><span class="label">SOL Balance</span><span class="value"><%= (byreal.solBalance || 0).toFixed(4) %> SOL</span></div>
+        <div class="stat-row"><span class="label">Yield Mode</span><span class="value"><%= byreal.yieldMode ? 'ON' : 'OFF' %></span></div>
+        <div class="stat-row"><span class="label">Active Positions</span><span class="value"><%= byreal.positions ? byreal.positions.length : 0 %></span></div>
+        <div class="stat-row" style="margin-top:10px">
+            <span class="label">Byreal TVL</span>
+            <span class="value"><%= byreal.overview ? '$'+byreal.overview.tvl.toLocaleString() : '—' %></span>
+        </div>
+        <% if (byreal.positions && byreal.positions.length > 0) { %>
+        <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">
+            <% byreal.positions.forEach(p => { %>
+            <div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+                <span><%= p.poolName || 'Position' %></span>
+                <span><%= p.depositedAmount ? '$'+p.depositedAmount.toFixed(2) : '—' %></span>
+            </div>
+            <% }) %>
+        </div>
+        <% } %>
+        <% } else { %>
+        <p style="color:var(--text-muted);font-size:13px;">Byreal CLI not installed. Idle funds will be deployed automatically when deployed in a Byreal-enabled environment.</p>
+        <% } %>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:10px;">Agent autonomously deploys idle SOL to Byreal CLMM pools for yield.</p>
+    </div>
+
+    <footer>TrusTEE &mdash; TEE-secured escrow agent on Mantle + Byreal (Solana) &middot; <a href="#" onclick="window.ethereum?null:alert('Install MetaMask to connect your wallet')" style="color:var(--accent);text-decoration:none;">Connect wallet</a> to see your escrows</footer>
 
     <script>
         const root = document.documentElement;

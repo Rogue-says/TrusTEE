@@ -48,7 +48,7 @@ cp .env.example .env
 ```
 
 | Variable | Description |
-|---|---|
+|---|---|---|
 | `MANTLE_RPC_URL` | Mantle Sepolia RPC endpoint |
 | `ESCROW_CONTRACT_ADDRESS` | Deployed escrow contract address |
 | `REPUTATION_REGISTRY_ADDRESS` | ERC-8004 registry address |
@@ -56,6 +56,8 @@ cp .env.example .env
 | `AGENT_SALT` | Salt for TEE key derivation (keep secret) |
 | `PORT` | HTTP server port (default: 3000) |
 | `DAILY_LIMIT` | Daily spending cap in MNT (default: 100) |
+| `YIELD_THRESHOLD_SOL` | Minimum idle SOL to trigger yield deployment (default: 0.5) |
+| `YIELD_CHECK_INTERVAL` | Yield loop interval in ms (default: 3600000 = 1hr) |
 | `DEV_MODE` | Set to `true` to run locally without TEE (generates random wallet) |
 
 ### Development

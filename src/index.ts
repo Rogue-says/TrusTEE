@@ -5,6 +5,7 @@ import path from 'path';
 import router from './routes.js';
 import { startEventListener } from './agent.js';
 import { getAgentAddress } from './teeClient.js';
+import * as byreal from './byreal.js';
 
 dotenv.config();
 
@@ -33,5 +34,6 @@ app.listen(PORT, async () => {
   const addr = await getAgentAddress();
   console.log(`\u{1F916} Agent wallet: ${addr}`);
   await startEventListener();
+  await byreal.startYieldLoop();
   console.log('\u2705 Agent ready');
 });
