@@ -4,13 +4,13 @@ TrusTEE
 ⚠️ NOT PRODUCTION READY
 This is a hackathon/prototype build. Known issues include unauthenticated admin endpoints, in-memory-only spend tracking (resets on restart), hardcoded mock chart data, testnet-only contracts, and an unprotected Solana wallet key. Do not deploy with real funds. See Known Limitations before using.
 
-
+##
 
 Autonomous escrow agent running in a Trusted Execution Environment (TEE) on Phala Cloud. Deployed on Mantle Sepolia testnet. Verifies signed delivery proofs, checks seller reputation, enforces daily spending limits, and autonomously deploys idle SOL to Byreal CLMM pools on Solana for yield.
 
 Private key is derived inside the TEE enclave and never leaves it. Anyone can verify the running code via remote attestation.
 
-
+##
 Architecture
 
 ┌──────────────────────────────────────────────┐
