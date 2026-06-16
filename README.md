@@ -1,190 +1,302 @@
-# TrusTEE
+TrusTEE
 
-Autonomous escrow agent running in a Trusted Execution Environment (TEE) on Phala Cloud. Holds funds on Mantle, verifies delivery proofs, checks ERC-8004 reputation, releases payments, and autonomously deploys idle funds to **Byreal CLMM pools on Solana** for yield.
 
-## Features
+⚠️ NOT PRODUCTION READY
+This is a hackathon/prototype build. Known issues include unauthenticated admin endpoints, in-memory-only spend tracking (resets on restart), hardcoded mock chart data, testnet-only contracts, and an unprotected Solana wallet key. Do not deploy with real funds. See Known Limitations before using.
 
-- **TEE-secured wallet** — Key derived inside the enclave via `@phala/dstack-sdk`; never leaves the TEE. Attestable to users.
-- **Escrow management** — Reads all escrows from the contract, displays status (pending/released/refunded)
-- **Delivery verification** — Accepts signed delivery proofs from sellers, verifies signatures and delivery hashes
-- **Reputation check** — Queries ERC-8004 reputation registry; rejects sellers below configurable threshold
-- **Spending limit** — Daily cap on total released MNT (configurable via dashboard or API)
-- **Dashboard** — Real-time status, wallet balance, escrow table, spending chart (Chart.js), spending limit control, dark mode
-- **Event listening** — Listens for `EscrowCreated` events and logs new escrows
-- **MetaMask connect** — Users connect their wallet to filter escrows by address
-- **On-chain history** — Timeline of all escrow events with timestamps and transaction hashes
-- **Byreal yield deployment** — Agent autonomously deploys idle SOL to Byreal CLMM pools for yield. Opens positions, claims fees, monitors APR.
-- **Skill-compatible** — Other AI agents can install TrusTEE as a skill via `npx skills add`
 
-## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js 20 + TypeScript |
-| Framework | Express + EJS |
-| Blockchain (Mantle) | viem |
-| DeFi (Solana) | Byreal Agent Skills (`byreal-cli`) |
-| TEE | @phala/dstack-sdk + Phala Cloud |
-| Charts | Chart.js (CDN) |
-| Dev tooling | tsx |
-| Deployment | Docker + Phala Cloud |
+Autonomous escrow agent running in a Trusted Execution Environment (TEE) on Phala Cloud. Deployed on Mantle Sepolia testnet. Verifies signed delivery proofs, checks seller reputation, enforces daily spending limits, and autonomously deploys idle SOL to Byreal CLMM pools on Solana for yield.
 
-## Getting Started
+Private key is derived inside the TEE enclave and never leaves it. Anyone can verify the running code via remote attestation.
 
-### Prerequisites
 
-- Node.js 20+
-- npm
+Architecture
 
-### Install
+┌──────────────────────────────────────────────┐
+│              Phala Cloud (TEE)               │
+│                                              │
+│   ┌──────────┐    ┌────────────────────┐     │
+│   │ Express  │───▶│  agent.ts          │     │
+│   │ + EJS    │    │  - escrow logic    │     │
+│   │ dashboard│    │  - sig verify      │     │
+│   └──────────┘    │  - spend limit     │     │
+│                   └────────┬───────────┘     │
+│                            │                 │
+│   ┌────────────────────────▼───────────┐     │
+│   │         teeClient.ts               │     │
+│   │  DstackClient → wallet key         │     │
+│   │  (key never leaves enclave)        │     │
+│   └────────────────────────────────────┘     │
+│                                              │
+│   ┌────────────────────────────────────┐     │
+│   │  byreal.ts + byrealClient.ts       │     │
+│   │  Autonomous yield loop (Solana)    │     │
+│   │  byreal-cli subprocess wrapper     │     │
+│   └────────────────────────────────────┘     │
+└──────────────────────────────────────────────┘
+         │                        │
+    Mantle Sepolia             Solana
+    (escrow contract)      (Byreal CLMM pools)
 
-```bash
-git clone <repo-url>
+
+Features
+
+
+TEE wallet — Key derived via @phala/dstack-sdk, attestable, never exported
+Escrow management — Reads up to 100 escrows from contract by polling IDs 0–99
+Delivery verification — Validates seller signature + optional delivery hash
+Reputation gate — Queries on-chain reputation registry; rejects sellers below threshold
+Daily spend cap — In-memory counter, resets at midnight, blocks over-limit releases
+Dashboard — Real-time status, 7-day spending chart, escrow table, dark mode
+Byreal yield — Deploys idle SOL to CLMM pools on configurable interval
+Skill-compatible — Other AI agents can install TrusTEE via npx skills add
+
+
+
+Known Limitations
+
+Read before deploying. These are real gaps in the current version:
+
+IssueImpactStatusSpending stats days 1–6 are hardcoded mock dataDashboard chart is misleadingNot fixedgetAllEscrows polls 100 RPC calls on every requestSlow + misses escrows with ID > 99Not fixedDaily spend counter is in-memory onlyServer restart resets the counterNot fixedNo auth on /set-limit and /byreal/yieldAnyone can disable limits or enable yieldNot fixedSolana wallet key stored in plaintext at ~/.config/byreal/keys/Not TEE-protected, unlike Mantle walletBy design (byreal-cli limitation)Testnet onlymantleSepoliaTestnet hardcoded in agent.ts and teeClient.tsNot fixed
+
+
+Tech Stack
+
+LayerTechnologyRuntimeNode.js 20 + TypeScriptFrameworkExpress + EJSBlockchain (Mantle)viemDeFi (Solana)Byreal Agent Skills (byreal-cli)TEE@phala/dstack-sdk + Phala CloudChartsChart.js (CDN)Dev toolingtsxDeploymentDocker + Phala Cloud
+
+
+Prerequisites
+
+
+Node.js 20+
+npm 9+
+Docker (for Phala Cloud deploy)
+A deployed escrow contract on Mantle Sepolia
+A deployed reputation registry contract on Mantle Sepolia
+
+
+No Phala account needed for local dev — use DEV_MODE=true.
+
+
+Local Development
+
+1. Clone and install
+
+bashgit clone <repo-url>
 cd trustee
 npm install
-```
 
-### Configuration
+2. Configure environment
 
-```bash
-cp .env.example .env
-```
+bashcp .env.example .env
 
-| Variable | Description |
-|---|---|
-| `MANTLE_RPC_URL` | Mantle Sepolia RPC endpoint |
-| `ESCROW_CONTRACT_ADDRESS` | Deployed escrow contract address |
-| `REPUTATION_REGISTRY_ADDRESS` | ERC-8004 registry address |
-| `MIN_REPUTATION` | Minimum reputation score (default: 70) |
-| `AGENT_SALT` | Salt for TEE key derivation (keep secret) |
-| `PORT` | HTTP server port (default: 3000) |
-| `DAILY_LIMIT` | Daily spending cap in MNT (default: 100) |
-| `YIELD_THRESHOLD_SOL` | Min idle SOL to trigger yield deployment (default: 0.5) |
-| `YIELD_CHECK_INTERVAL` | Yield loop interval in ms (default: 3600000 = 1hr) |
-| `DEV_MODE` | `true` to run locally without TEE (random wallet) |
+Edit .env:
 
-### Development
+env# Required
+MANTLE_RPC_URL=https://rpc.sepolia.mantle.xyz
+ESCROW_CONTRACT_ADDRESS=0xYourEscrowContract
+REPUTATION_REGISTRY_ADDRESS=0xYourReputationRegistry
 
-```bash
-npm run dev
-```
+# TEE key derivation salt — treat like a private key
+AGENT_SALT=your-secret-salt-here
 
-Dashboard at `http://localhost:3000`. Set `DEV_MODE=true` to skip the TEE SDK and use a local random wallet.
+# Optional overrides (defaults shown)
+MIN_REPUTATION=70
+PORT=3000
+DAILY_LIMIT=100
+YIELD_THRESHOLD_SOL=0.5
+YIELD_CHECK_INTERVAL=3600000
 
-### Build
+# Skip TEE SDK for local dev — uses a random throwaway wallet
+DEV_MODE=true
 
-```bash
-npm run build
+
+Warning: AGENT_SALT is the seed for your TEE wallet. Changing it in production generates a new wallet address and abandons any funds in the old one. Back it up.
+
+
+
+3. Run
+
+bashnpm run dev
+
+Dashboard at http://localhost:3000.
+
+In DEV_MODE=true, a random wallet is generated each restart. It holds no real funds. You can still test all UI and API flows.
+
+
+Build
+
+bashnpm run build
+# Outputs to ./dist/ and copies views
 npm start
-```
 
-## Deployment (Phala Cloud)
 
-```bash
-npm run build
-# Upload TrusTEE.zip to Phala Cloud web dashboard
-# Set your env vars in the Phala Cloud console
-```
+Docker (local)
 
-After deployment, you receive a public URL like `https://trustee-xxxx.phala.cloud`.
+bashnpm run build
+docker build -t trustee:latest .
+docker run -p 3000:3000 \
+  -e MANTLE_RPC_URL=https://rpc.sepolia.mantle.xyz \
+  -e ESCROW_CONTRACT_ADDRESS=0x... \
+  -e REPUTATION_REGISTRY_ADDRESS=0x... \
+  -e AGENT_SALT=your-salt \
+  -e DEV_MODE=true \
+  trustee:latest
 
-## Dashboard
 
-The dashboard is served at your public URL. Includes:
+Deployment (Phala Cloud TEE)
 
-- Agent status (wallet address, MNT balance, uptime)
-- Spending chart (7-day bar chart via Chart.js)
-- Spending limit control (set daily cap live)
-- Escrows table (all escrows with status)
-- History timeline (on-chain events with dates/tx hashes)
-- Wallet connect (MetaMask) — filter to "My Escrows"
-- Delivery proof form (release funds)
-- Byreal yield section (Solana wallet, SOL balance, LP positions, TVL)
-- API for Agents (curl examples)
-- Dark/light mode toggle
+This is where the TEE security guarantees activate. DEV_MODE must be unset or false.
 
-## API Endpoints
+1. Build and package
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/` | GET | Dashboard UI |
-| `/status` | GET | Agent status, balance, limits, Byreal status |
-| `/wallet` | GET | Agent wallet address |
-| `/escrows` | GET | List all escrows |
-| `/delivery-proof` | POST | Submit delivery proof and release funds |
-| `/set-limit` | POST | Update daily spending limit |
-| `/spending-stats` | GET | Spending data for chart (last 7 days) |
-| `/history` | GET | On-chain escrow event timeline |
-| `/byreal/status` | GET | Byreal wallet, positions, yield mode |
-| `/byreal/pools` | GET | List Byreal CLMM pools |
-| `/byreal/yield` | POST | Enable/disable yield mode |
-| `/attestation` | GET | TEE attestation info |
+bashnpm run build
+zip -r TrusTEE.zip dist/ src/views/ package.json package-lock.json Dockerfile app-compose.json
 
-### POST /delivery-proof
+2. Deploy to Phala Cloud
 
-```json
-{
-  "escrowId": 1,
-  "signature": "0x...",
-  "deliveryHash": "0x..." (optional)
-}
-```
 
-## Byreal Integration
+Log in at cloud.phala.network
+Create new deployment → upload TrusTEE.zip
+Set all environment variables in the console:
 
-TrusTEE integrates **Byreal Agent Skills** for autonomous yield deployment on Solana:
 
-1. **Read-only operations** — Query pool TVL, APR, and token info (no wallet needed)
-2. **Yield mode** — When enabled, agent checks idle SOL balance every hour. If above threshold, deploys to a Byreal CLMM pool.
-3. **Position management** — Open and close concentrated liquidity positions via `byreal-cli`
-4. **Dashboard visibility** — See wallet address, SOL balance, active positions, and Byreal TVL
+MANTLE_RPC_URL
+ESCROW_CONTRACT_ADDRESS
+REPUTATION_REGISTRY_ADDRESS
+AGENT_SALT
+MIN_REPUTATION
+PORT
+DAILY_LIMIT
+YIELD_THRESHOLD_SOL
+YIELD_CHECK_INTERVAL
 
-The `byreal-cli` is installed globally in the Docker image via `npm install -g @byreal-io/byreal-cli`.
+Do not set DEV_MODE. Leave it unset so the DstackClient TEE path runs.
 
-## Skill for AI Agents
 
-Other AI agents can install TrusTEE as a skill:
+Deploy. You get a URL like https://trustee-xxxx.phala.cloud.
 
-```bash
-npx skills add your-github/trustee
-```
 
-After installation, the agent can use TrusTEE's capabilities via natural language:
-- "List my escrows"
-- "Release escrow 5 after delivery confirmation"
-- "Check Byreal pool APRs"
-- "Enable yield mode on idle funds"
+3. Get agent wallet address
 
-## Project Structure
+bashcurl https://trustee-xxxx.phala.cloud/wallet
 
-```
+Fund this address with MNT on Mantle Sepolia before it can release any escrows.
+
+4. Verify attestation
+
+The running code is attestable. Check the Phala Cloud dashboard for the attestation report. Users can independently verify the code hash matches what you deployed.
+
+
+Environment Variables Reference
+
+VariableRequiredDefaultDescriptionMANTLE_RPC_URLYes—Mantle Sepolia RPC endpointESCROW_CONTRACT_ADDRESSYes—Deployed escrow contract addressREPUTATION_REGISTRY_ADDRESSYes—On-chain reputation registry addressAGENT_SALTYes (prod)'tee-escrow/v1'Salt for TEE key derivation. Keep secret.MIN_REPUTATIONNo70Min reputation score to allow payment releasePORTNo3000HTTP portDAILY_LIMITNo100Daily spending cap in MNTYIELD_THRESHOLD_SOLNo0.5Min idle SOL before yield deployment triggersYIELD_CHECK_INTERVALNo3600000Yield loop interval in ms (default: 1 hour)DEV_MODENounsetSet to true to skip TEE SDK and use random wallet
+
+
+API Endpoints
+
+EndpointMethodAuthDescription/GETNoneDashboard UI/statusGETNoneAgent status, balances, uptime/walletGETNoneAgent wallet address/escrowsGETNoneList all escrows (polls IDs 0–99)/delivery-proofPOSTNoneSubmit delivery proof, release funds/set-limitPOSTNone*Update daily spending limit/spending-statsGETNone7-day spending data for chart/historyGETNoneOn-chain escrow event timeline/attestationGETNoneTEE attestation info/byreal/statusGETNoneSolana wallet, positions, yield mode/byreal/poolsGETNoneList Byreal CLMM pools/byreal/yieldPOSTNone*Enable/disable autonomous yield mode
+
+*No authentication currently. Do not expose these endpoints publicly without adding an API key.
+
+POST /delivery-proof
+
+bashcurl -X POST https://trustee-xxxx.phala.cloud/delivery-proof \
+  -H "Content-Type: application/json" \
+  -d '{
+    "escrowId": 1,
+    "signature": "0x...",
+    "deliveryHash": "0x..."
+  }'
+
+The signature must be produced by the seller's wallet over the message:
+
+Release escrow {id} with delivery {deliveryHash}
+
+POST /set-limit
+
+bashcurl -X POST https://trustee-xxxx.phala.cloud/set-limit \
+  -H "Content-Type: application/json" \
+  -d '{ "limit": 50 }'
+
+POST /byreal/yield
+
+bashcurl -X POST https://trustee-xxxx.phala.cloud/byreal/yield \
+  -H "Content-Type: application/json" \
+  -d '{ "enabled": true }'
+
+
+Byreal Yield Integration
+
+Byreal is installed globally inside the Docker image (npm install -g @byreal-io/byreal-cli). TrusTEE wraps it via subprocess in byrealClient.ts.
+
+How it works:
+
+
+Every YIELD_CHECK_INTERVAL ms, agent checks idle SOL balance
+If balance ≥ YIELD_THRESHOLD_SOL, deploys 80% to a Byreal CLMM pool
+Pool is auto-selected (first USDC pool returned by byreal-cli pools list)
+Positions are visible on the dashboard under the Byreal section
+
+
+Note on security: The Solana wallet managed by byreal-cli is stored at ~/.config/byreal/keys/ inside the container. It is not TEE-protected. The Mantle wallet is TEE-protected. These are separate security domains.
+
+Enable yield mode:
+
+bashcurl -X POST /byreal/yield -d '{ "enabled": true }'
+
+
+AI Agent Skill
+
+Other AI agents (OpenClaw, etc.) can install TrusTEE as a skill:
+
+bashnpx skills add your-github/trustee
+
+After install, natural language commands like these are available to the agent:
+
+
+"List my escrows"
+"Release escrow 5 after delivery confirmation"
+"Check Byreal pool APRs"
+"Enable yield mode"
+
+
+Skill manifest is at skills/trustee/SKILL.md.
+
+
+Project Structure
+
 ├── src/
-│   ├── index.ts           # Express server entry point
-│   ├── agent.ts           # Core escrow logic, release, spending limit
+│   ├── index.ts           # Express server entry, startup sequence
+│   ├── agent.ts           # Escrow logic, release, spend limit, history
 │   ├── teeClient.ts       # TEE wallet derivation (DstackClient)
-│   ├── reputation.ts      # ERC-8004 reputation lookup
-│   ├── byrealClient.ts    # Byreal CLI async wrapper (pools, swap, positions)
+│   ├── reputation.ts      # On-chain reputation lookup
+│   ├── byrealClient.ts    # byreal-cli subprocess wrapper
 │   ├── byreal.ts          # Autonomous yield deployment loop
 │   ├── routes.ts          # Express routes + dashboard render
 │   └── views/
 │       └── dashboard.ejs  # Dashboard template (Chart.js)
 ├── skills/
 │   └── trustee/
-│       └── SKILL.md       # Byreal-compatible skill manifest
+│       └── SKILL.md       # AI agent skill manifest
 ├── Dockerfile
 ├── app-compose.json       # Phala Cloud deployment manifest
 ├── package.json
 ├── tsconfig.json
 └── .env.example
-```
 
-## How the TEE Works
 
-1. **Code encrypted at rest** — Phala encrypts your Docker image when stored
-2. **Decrypted inside CPU** — Intel SGX/AMD SEV decrypts only inside a secure enclave
-3. **Wallet key never leaves** — Derived via `DstackClient`, exists only in CPU registers during signing
-4. **Remote attestation** — Anyone can verify the running code matches what you deployed
+How the TEE Works
 
-## License
+
+Docker image encrypted at rest by Phala Cloud
+Decrypted only inside the CPU secure enclave (Intel SGX / AMD SEV)
+DstackClient.getKey(salt) derives wallet key inside enclave — never written to disk or network
+Remote attestation lets anyone verify the running code matches the deployed image
+
+
+
+License
 
 MIT
