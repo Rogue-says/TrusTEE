@@ -39,7 +39,7 @@ Architecture
     Mantle Sepolia             Solana
     (escrow contract)      (Byreal CLMM pools)
 
-
+##
 Features
 
 
@@ -52,7 +52,7 @@ Dashboard — Real-time status, 7-day spending chart, escrow table, dark mode
 Byreal yield — Deploys idle SOL to CLMM pools on configurable interval
 Skill-compatible — Other AI agents can install TrusTEE via npx skills add
 
-
+##
 
 Known Limitations
 
@@ -60,12 +60,12 @@ Read before deploying. These are real gaps in the current version:
 
 IssueImpactStatusSpending stats days 1–6 are hardcoded mock dataDashboard chart is misleadingNot fixedgetAllEscrows polls 100 RPC calls on every requestSlow + misses escrows with ID > 99Not fixedDaily spend counter is in-memory onlyServer restart resets the counterNot fixedNo auth on /set-limit and /byreal/yieldAnyone can disable limits or enable yieldNot fixedSolana wallet key stored in plaintext at ~/.config/byreal/keys/Not TEE-protected, unlike Mantle walletBy design (byreal-cli limitation)Testnet onlymantleSepoliaTestnet hardcoded in agent.ts and teeClient.tsNot fixed
 
-
+##
 Tech Stack
 
 LayerTechnologyRuntimeNode.js 20 + TypeScriptFrameworkExpress + EJSBlockchain (Mantle)viemDeFi (Solana)Byreal Agent Skills (byreal-cli)TEE@phala/dstack-sdk + Phala CloudChartsChart.js (CDN)Dev toolingtsxDeploymentDocker + Phala Cloud
 
-
+##
 Prerequisites
 
 
@@ -78,7 +78,7 @@ A deployed reputation registry contract on Mantle Sepolia
 
 No Phala account needed for local dev — use DEV_MODE=true.
 
-
+##
 Local Development
 
 1. Clone and install
@@ -144,7 +144,7 @@ docker run -p 3000:3000 \
   -e DEV_MODE=true \
   trustee:latest
 
-
+##
 Deployment (Phala Cloud TEE)
 
 This is where the TEE security guarantees activate. DEV_MODE must be unset or false.
@@ -174,7 +174,7 @@ YIELD_CHECK_INTERVAL
 
 Do not set DEV_MODE. Leave it unset so the DstackClient TEE path runs.
 
-
+##
 Deploy. You get a URL like https://trustee-xxxx.phala.cloud.
 
 
@@ -230,7 +230,7 @@ bashcurl -X POST https://trustee-xxxx.phala.cloud/byreal/yield \
 Byreal Yield Integration
 
 Byreal is installed globally inside the Docker image (npm install -g @byreal-io/byreal-cli). TrusTEE wraps it via subprocess in byrealClient.ts.
-
+##
 How it works:
 
 
@@ -246,7 +246,7 @@ Enable yield mode:
 
 bashcurl -X POST /byreal/yield -d '{ "enabled": true }'
 
-
+##
 AI Agent Skill
 
 Other AI agents (OpenClaw, etc.) can install TrusTEE as a skill:
@@ -264,7 +264,7 @@ After install, natural language commands like these are available to the agent:
 
 Skill manifest is at skills/trustee/SKILL.md.
 
-
+##
 Project Structure
 
 ├── src/
@@ -286,7 +286,7 @@ Project Structure
 ├── tsconfig.json
 └── .env.example
 
-
+##
 How the TEE Works
 
 
@@ -296,7 +296,7 @@ DstackClient.getKey(salt) derives wallet key inside enclave — never written to
 Remote attestation lets anyone verify the running code matches the deployed image
 
 
-
+##
 License
-
+##
 MIT
