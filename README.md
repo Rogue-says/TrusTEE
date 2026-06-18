@@ -16,7 +16,7 @@ Private key is derived inside the TEE enclave and never leaves it. Anyone can ve
 │              Phala Cloud (TEE)               │
 │                                              │
 │   ┌──────────┐    ┌────────────────────┐     │
-│   │ Express  │───▶│  agent.ts          │     │
+│   │ Express  │───▶│  agent.ts          │    │
 │   │ + EJS    │    │  - escrow logic    │     │
 │   │ dashboard│    │  - sig verify      │     │
 │   └──────────┘    │  - spend limit     │     │
