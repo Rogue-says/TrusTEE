@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execAsync = promisify(execFile);
 const CONFIG_DIR = `${homedir()}/.config/byreal`;
 const KEY_PATH = `${CONFIG_DIR}/keys/trustee-wallet.json`;
 
@@ -13,9 +13,9 @@ function ensureDir() {
   }
 }
 
-async function cli(args: string): Promise<any> {
+async function cli(args: string[]): Promise<any> {
   try {
-    const { stdout } = await execAsync(`byreal-cli ${args} -o json`, {
+    const { stdout } = await execAsync('byreal-cli', [...args, '-o', 'json'], {
       timeout: 30000
     });
     return JSON.parse(stdout);
@@ -33,14 +33,14 @@ async function cli(args: string): Promise<any> {
 export async function setupWallet(privateKey?: string) {
   ensureDir();
   if (!privateKey) {
-    return cli('wallet generate');
+    return cli(['wallet', 'generate']);
   }
-  writeFileSync(KEY_PATH, privateKey, 'utf-8');
-  return cli(`wallet import --keypair ${KEY_PATH}`);
+  writeFileSync(KEY_PATH, privateKey, { encoding: 'utf-8', mode: 0o600 });
+  return cli(['wallet', 'import', '--keypair', KEY_PATH]);
 }
 
 export async function getWalletAddress(): Promise<string | null> {
-  const result = await cli('wallet address');
+  const result = await cli(['wallet', 'address']);
   if (result?.success && result?.data?.address) {
     return result.data.address;
   }
@@ -48,7 +48,7 @@ export async function getWalletAddress(): Promise<string | null> {
 }
 
 export async function getBalance(): Promise<number> {
-  const result = await cli('wallet balance');
+  const result = await cli(['wallet', 'balance']);
   if (result?.success && result?.data?.balances) {
     const sol = result.data.balances.find((b: any) => b.mint === 'SOL');
     return sol?.amount || 0;
@@ -57,44 +57,43 @@ export async function getBalance(): Promise<number> {
 }
 
 export async function getOverview() {
-  return cli('overview');
+  return cli(['overview']);
 }
 
 export async function getPools(search?: string) {
-  const filter = search ? `--search "${search}"` : '';
-  return cli(`pools list ${filter}`);
+  return cli(['pools', 'list', ...(search ? ['--search', search] : [])]);
 }
 
 export async function getPoolInfo(address: string) {
-  return cli(`pools info --address ${address}`);
+  return cli(['pools', 'info', '--address', address]);
 }
 
 export async function listPositions() {
-  return cli('positions list');
+  return cli(['positions', 'list']);
 }
 
 export async function openPosition(poolAddress: string, amountUsd: number) {
-  return cli(`positions open --pool ${poolAddress} --amount-usd ${amountUsd}`);
+  return cli(['positions', 'open', '--pool', poolAddress, '--amount-usd', String(amountUsd)]);
 }
 
 export async function closePosition(positionMint: string) {
-  return cli(`positions close --position-mint ${positionMint}`);
+  return cli(['positions', 'close', '--position-mint', positionMint]);
 }
 
 export async function claimFees() {
-  return cli('positions claim');
+  return cli(['positions', 'claim']);
 }
 
 export async function swap(inputMint: string, outputMint: string, amount: number, dryRun = false) {
-  const dry = dryRun ? '--dry-run' : '';
-  return cli(`swap execute --input-mint ${inputMint} --output-mint ${outputMint} --amount ${amount} ${dry}`);
+  return cli(['swap', 'execute', '--input-mint', inputMint, '--output-mint', outputMint, '--amount', String(amount), ...(dryRun ? ['--dry-run'] : [])]);
 }
 
 export async function isByrealAvailable(): Promise<boolean> {
   try {
-    await execAsync('which byreal-cli', { timeout: 5000 });
+    await execAsync('byreal-cli', ['--version'], { timeout: 5000 });
     return true;
   } catch {
     return false;
   }
 }
+

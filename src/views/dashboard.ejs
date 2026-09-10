@@ -205,12 +205,12 @@
                 <thead><tr><th>ID</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Status</th></tr></thead>
                 <tbody>
                     <% escrows.forEach(e => { %>
-                    <tr data-buyer="<%= e[0].toLowerCase() %>" data-seller="<%= e[1].toLowerCase() %>">
+                    <tr data-buyer="<%= e.buyer.toLowerCase() %>" data-seller="<%= e.seller.toLowerCase() %>">
                         <td><%= e.id %></td>
-                        <td><code><%= e[0].slice(0,8) %>&hellip;</code></td>
-                        <td><code><%= e[1].slice(0,8) %>&hellip;</code></td>
-                        <td><%= (Number(e[2])/1e18).toFixed(4) %> MNT</td>
-                        <td><%= e[3] ? 'Released' : (e[4] ? 'Refunded' : 'Pending') %></td>
+                        <td><code><%= e.buyer.slice(0,8) %>&hellip;</code></td>
+                        <td><code><%= e.seller.slice(0,8) %>&hellip;</code></td>
+                        <td><%= Number(e.amount).toFixed(4) %> MNT</td>
+                        <td><%= e.released ? 'Released' : (e.refunded ? 'Refunded' : 'Pending') %></td>
                     </tr>
                     <% }) %>
                 </tbody>
@@ -247,7 +247,7 @@
         <form class="proof-form" id="proofForm">
             <input type="number" id="escrowId" placeholder="Escrow ID" required>
             <input type="text" id="signature" placeholder="Signature (0x...)" required>
-            <input type="text" id="deliveryHash" placeholder="Delivery hash (optional)">
+            <input type="text" id="deliveryHash" placeholder="Delivery hash (bytes32, required)">
             <button class="btn" type="submit">Release Funds</button>
         </form>
         <div id="proofResult"></div>
@@ -415,7 +415,7 @@ curl https://your-url.phala.cloud/history</pre>
             if (isNaN(limit)) return;
             const res = await fetch('/set-limit', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (prompt('Admin API token (not saved)') || '') },
                 body: JSON.stringify({ limit })
             });
             const result = await res.json();
@@ -430,7 +430,7 @@ curl https://your-url.phala.cloud/history</pre>
             const deliveryHash = document.getElementById('deliveryHash').value;
             const res = await fetch('/delivery-proof', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (prompt('Admin API token (not saved)') || '') },
                 body: JSON.stringify({ escrowId: parseInt(escrowId), signature, deliveryHash })
             });
             const result = await res.json();
@@ -450,3 +450,4 @@ curl https://your-url.phala.cloud/history</pre>
     </script>
 </body>
 </html>
+

@@ -1,0 +1,35 @@
+{
+  "name": "trustee",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/copy-views.cjs",
+    "start": "node dist/index.js",
+    "dev": "node --import tsx src/index.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "compile:contracts": "hardhat compile"
+  },
+  "dependencies": {
+    "@phala/dstack-sdk": "^0.5.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/ejs": "^3.1.5",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "ethers": "^6.17.0",
+    "hardhat": "^2.29.1",
+    "solc": "0.8.20",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

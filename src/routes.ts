@@ -8,6 +8,14 @@ import { mantleSepoliaTestnet } from 'viem/chains';
 const mantleSepolia = mantleSepoliaTestnet;
 
 const router = express.Router();
+// Protect every state-changing endpoint. Read-only dashboard remains public.
+router.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (!process.env.ADMIN_API_TOKEN) return res.status(503).json({ error: 'Admin API token is not configured' });
+  if (req.headers.authorization !== `Bearer ${process.env.ADMIN_API_TOKEN}`)
+    return res.status(401).json({ error: 'Unauthorized' });
+  next();
+});
 
 function getPublicClient() {
   return createPublicClient({ chain: mantleSepolia, transport: http(process.env.MANTLE_RPC_URL!) });
@@ -45,7 +53,7 @@ router.get('/escrows', async (req: Request, res: Response) => {
 
 router.post('/delivery-proof', async (req: Request, res: Response) => {
   const { escrowId, signature, deliveryHash } = req.body;
-  if (!escrowId || !signature) return res.status(400).json({ error: 'Missing escrowId or signature' });
+  if (!Number.isSafeInteger(escrowId) || escrowId < 0 || typeof signature !== 'string' || !/^0x[0-9a-fA-F]{130}$/.test(signature) || typeof deliveryHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(deliveryHash)) return res.status(400).json({ error: 'Missing escrowId or signature' });
   const result = await releaseEscrow(Number(escrowId), signature, deliveryHash || '');
   if (result.success) res.json({ success: true, txHash: result.txHash });
   else res.status(400).json({ success: false, error: result.error });
@@ -53,7 +61,7 @@ router.post('/delivery-proof', async (req: Request, res: Response) => {
 
 router.post('/set-limit', async (req: Request, res: Response) => {
   const { limit } = req.body;
-  if (typeof limit !== 'number' || limit <= 0) return res.status(400).json({ error: 'Invalid limit' });
+  if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) return res.status(400).json({ error: 'Invalid limit' });
   const newLimit = await setDailyLimit(limit);
   res.json({ success: true, limit: newLimit });
 });
@@ -79,12 +87,14 @@ router.get('/byreal/status', async (req: Request, res: Response) => {
 
 router.post('/byreal/yield', async (req: Request, res: Response) => {
   const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  if (enabled) return res.status(409).json({ error: 'Automatic yield allocation is not implemented' });
   byreal.setYieldMode(enabled);
   res.json({ success: true, yieldMode: enabled });
 });
 
 router.get('/byreal/pools', async (req: Request, res: Response) => {
-  const pools = await byrealClient.getPools(req.query.search as string);
+  const pools = await byrealClient.getPools(typeof req.query.search === 'string' ? req.query.search : undefined);
   res.json(pools);
 });
 
@@ -109,3 +119,4 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 export default router;
+
