@@ -1,4 +1,4 @@
-import { createPublicClient, http, recoverMessageAddress } from 'viem';
+import { createPublicClient, http, recoverMessageAddress, parseEther, formatEther } from 'viem';
 import { mantleSepoliaTestnet } from 'viem/chains';
 const mantleSepolia = mantleSepoliaTestnet;
 import { getTeeWallet } from './teeClient.js';
@@ -17,11 +17,15 @@ function getPublicClient() {
 
 const escrowAbi = [
   { inputs: [{ name: 'id', type: 'uint256' }], name: 'release', outputs: [], stateMutability: 'nonpayable', type: 'function' },
-  { inputs: [{ name: 'id', type: 'uint256' }], name: 'getEscrow', outputs: [
+  { inputs: [], name: 'getEscrowCount', outputs: [{ type: 'uint256' }], stateMutability: 'view', type: 'function' },
+  { inputs: [{ name: 'id', type: 'uint256' }], name: 'getEscrow', outputs: [{ type: 'tuple', components: [
     { name: 'buyer', type: 'address' }, { name: 'seller', type: 'address' }, { name: 'amount', type: 'uint256' },
     { name: 'released', type: 'bool' }, { name: 'refunded', type: 'bool' }, { name: 'deadline', type: 'uint256' },
     { name: 'deliveryHash', type: 'bytes32' }
-  ], stateMutability: 'view', type: 'function' },
+  ] }], stateMutability: 'view', type: 'function' },
+  { anonymous: false, inputs: [{ indexed: true, name: 'id', type: 'uint256' },
+    { indexed: true, name: 'seller', type: 'address' }, { indexed: false, name: 'amount', type: 'uint256' }],
+    name: 'Released', type: 'event' },
   { anonymous: false, inputs: [
     { indexed: true, name: 'id', type: 'uint256' }, { indexed: true, name: 'buyer', type: 'address' },
     { indexed: true, name: 'seller', type: 'address' }, { indexed: false, name: 'amount', type: 'uint256' },
@@ -29,41 +33,29 @@ const escrowAbi = [
   ], name: 'EscrowCreated', type: 'event' }
 ] as const;
 
-const NULL_ADDRESS = '0x0000000000000000000000000000000000000000';
-
 let dailyLimit: number | null = null;
-let dailyReleasedTotal = 0;
-let lastResetDate = new Date().toDateString();
 
 function getDailyLimitValue(): number {
   if (dailyLimit === null) {
-    dailyLimit = parseFloat(process.env.DAILY_LIMIT || '100');
+    dailyLimit = Number(process.env.DAILY_LIMIT || '100');
+    if (!Number.isFinite(dailyLimit) || dailyLimit <= 0) throw new Error('Invalid DAILY_LIMIT');
   }
   return dailyLimit;
 }
 
-function resetDailyTotalIfNeeded() {
-  const today = new Date().toDateString();
-  if (today !== lastResetDate) {
-    dailyReleasedTotal = 0;
-    lastResetDate = today;
-  }
-}
-
 export async function setDailyLimit(limitMNT: number) {
+  if (!Number.isFinite(limitMNT) || limitMNT <= 0) throw new Error('Invalid daily limit');
   dailyLimit = limitMNT;
   console.log(`Daily spending limit updated to ${dailyLimit} MNT`);
   return dailyLimit;
 }
 
 export async function getDailyLimit(): Promise<number> {
-  resetDailyTotalIfNeeded();
   return getDailyLimitValue();
 }
 
 export async function getDailySpent(): Promise<number> {
-  resetDailyTotalIfNeeded();
-  return dailyReleasedTotal;
+  return Number(formatEther(await dailySpentWei()));
 }
 
 export async function getEscrowDetails(id: number) {
@@ -74,22 +66,39 @@ export async function getEscrowDetails(id: number) {
       functionName: 'getEscrow',
       args: [BigInt(id)]
     });
-    return escrow;
+    return [escrow.buyer, escrow.seller, escrow.amount, escrow.released, escrow.refunded, escrow.deadline, escrow.deliveryHash] as const;
   } catch { return null; }
 }
 
 export async function getAllEscrows(): Promise<any[]> {
-  const MAX_ESCROWS = 100;
-  const promises = Array.from({ length: MAX_ESCROWS }, (_, i) => getEscrowDetails(i));
-  const results = await Promise.all(promises);
-  return results
-    .map((e, i) => ({ id: i, data: e }))
-    .filter(({ data }) => data && (data as any)[0] !== NULL_ADDRESS)
-    .map(({ id, data }) => ({ id, ...data }));
+  const count = await getPublicClient().readContract({ address: getEscrowAddress(), abi: escrowAbi, functionName: 'getEscrowCount' });
+  const end = Number(count);
+  if (!Number.isSafeInteger(end)) throw new Error('Escrow count exceeds supported range');
+  const result: any[] = [];
+  // Bound RPC concurrency and show the newest 100 escrows.
+  for (let start = Math.max(0, end - 100); start < end; start += 10) {
+    const ids = Array.from({ length: Math.min(10, end - start) }, (_, i) => start + i);
+    const rows = await Promise.all(ids.map(getEscrowDetails));
+    rows.forEach((e, i) => { if (e) result.push({ id: ids[i], buyer: e[0], seller: e[1],
+      amount: formatEther(e[2]), released: e[3], refunded: e[4], deadline: Number(e[5]), deliveryHash: e[6] }); });
+  }
+  return result.reverse();
 }
 
-export async function releaseEscrow(id: number, signature: string, deliveryHash: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
-  resetDailyTotalIfNeeded();
+let queue: Promise<unknown> = Promise.resolve();
+let pendingHash: `0x${string}` | null = null;
+export function releaseEscrow(id: number, signature: string, deliveryHash: string) {
+  const next = queue.then(() => releaseSerialized(id, signature, deliveryHash));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+async function releaseSerialized(id: number, signature: string, deliveryHash: string): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (!Number.isSafeInteger(id) || id < 0 || !/^0x[0-9a-fA-F]{64}$/.test(deliveryHash)) return { success: false, error: 'Invalid proof input' };
+  if (pendingHash) {
+    try { await getPublicClient().getTransactionReceipt({ hash: pendingHash }); pendingHash = null; }
+    catch { return { success: false, error: 'A previous payment is awaiting confirmation' }; }
+  }
   console.log(`Processing release for escrow ${id}...`);
   const escrow = await getEscrowDetails(id);
   if (!escrow) return { success: false, error: 'Escrow not found' };
@@ -98,21 +107,21 @@ export async function releaseEscrow(id: number, signature: string, deliveryHash:
   if (refunded) return { success: false, error: 'Already refunded' };
   if (Date.now() / 1000 > Number(deadline)) return { success: false, error: 'Deadline passed' };
 
-  const message = `Release escrow ${id} with delivery ${deliveryHash}`;
+  const message = `TrusTEE release:${mantleSepolia.id}:${getEscrowAddress().toLowerCase()}:${id}:${deliveryHash.toLowerCase()}`;
   let recovered: `0x${string}`;
   try { recovered = await recoverMessageAddress({ message, signature: signature as `0x${string}` }); }
   catch { return { success: false, error: 'Invalid signature' }; }
   if (recovered.toLowerCase() !== (seller as string).toLowerCase()) return { success: false, error: 'Signature mismatch' };
 
-  if (storedDeliveryHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && storedDeliveryHash !== deliveryHash)
+  if (storedDeliveryHash !== '0x0000000000000000000000000000000000000000000000000000000000000000' && storedDeliveryHash.toLowerCase() !== deliveryHash.toLowerCase())
     return { success: false, error: 'Delivery hash mismatch' };
 
   const { score, meetsThreshold } = await getSellerReputation(seller as `0x${string}`);
   if (!meetsThreshold) return { success: false, error: `Reputation too low: ${score}` };
 
-  const amountMNT = Number(amount) / 1e18;
+  const spent = await dailySpentWei();
   const limit = getDailyLimitValue();
-  if (dailyReleasedTotal + amountMNT > limit)
+  if (spent + amount > parseEther(String(limit)))
     return { success: false, error: `Daily spending limit exceeded (limit: ${limit} MNT)` };
 
   try {
@@ -123,7 +132,10 @@ export async function releaseEscrow(id: number, signature: string, deliveryHash:
       functionName: 'release',
       args: [BigInt(id)]
     });
-    dailyReleasedTotal += amountMNT;
+    pendingHash = hash;
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    pendingHash = null;
+    if (receipt.status !== 'success') return { success: false, error: 'Release transaction reverted' };
     console.log(`\u2705 Released escrow ${id}, tx: ${hash}`);
     return { success: true, txHash: hash };
   } catch (err: any) {
@@ -131,16 +143,32 @@ export async function releaseEscrow(id: number, signature: string, deliveryHash:
   }
 }
 
-export async function getSpendingStats(): Promise<{ labels: string[]; totals: number[] }> {
-  const days: string[] = [];
-  const today = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    days.push(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
+let cachedDay: { date: string; block: bigint } | null = null;
+async function dailySpentWei(): Promise<bigint> {
+  const client = getPublicClient();
+  const latest = await client.getBlock();
+  const dayStart = latest.timestamp / 86400n * 86400n;
+  const date = dayStart.toString();
+  if (cachedDay?.date !== date) {
+    let lo = 0n, hi = latest.number;
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      const block = await client.getBlock({ blockNumber: mid });
+      if (block.timestamp < dayStart) lo = mid + 1n; else hi = mid;
+    }
+    cachedDay = { date, block: lo };
   }
-  const totals = [12, 19, 8, 15, 22, 10, dailyReleasedTotal];
-  return { labels: days, totals };
+  let total = 0n;
+  for (let from = cachedDay!.block; from <= latest.number; from += 2000n) {
+    const logs = await client.getContractEvents({ address: getEscrowAddress(), abi: escrowAbi, eventName: 'Released',
+      fromBlock: from, toBlock: from + 1999n < latest.number ? from + 1999n : latest.number });
+    for (const log of logs) total += log.args.amount ?? 0n;
+  }
+  return total;
+}
+
+export async function getSpendingStats(): Promise<{ labels: string[]; totals: number[] }> {
+  return { labels: ['Today (UTC)'], totals: [await getDailySpent()] };
 }
 
 export async function getHistory(): Promise<any[]> {
@@ -150,7 +178,7 @@ export async function getHistory(): Promise<any[]> {
       address: getEscrowAddress(),
       abi: escrowAbi,
       eventName: 'EscrowCreated',
-      fromBlock: fromBlock - 5000n,
+      fromBlock: fromBlock > 5000n ? fromBlock - 5000n : 0n,
       toBlock: 'latest'
     });
     const history = await Promise.all(logs.reverse().map(async (log) => {
@@ -196,3 +224,4 @@ export async function startEventListener() {
     }
   });
 }
+

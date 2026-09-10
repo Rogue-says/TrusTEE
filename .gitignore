@@ -1,7 +1,8 @@
+node_modules/
+dist/
 .env
 .env.*
-venv/
-.venv/
-__pycache__/
-*.pyc
-TrusTEE.zip
+!.env.example
+*.log
+artifacts/
+cache/

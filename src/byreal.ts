@@ -1,7 +1,5 @@
 import * as byreal from './byrealClient.js';
 
-let activePositions: any[] = [];
-let lastPoolCheck = 0;
 let yieldMode = false;
 
 export function isYieldMode(): boolean {
@@ -9,7 +7,8 @@ export function isYieldMode(): boolean {
 }
 
 export function setYieldMode(enabled: boolean) {
-  yieldMode = enabled;
+  if (enabled) throw new Error('Automatic yield allocation is not implemented');
+  yieldMode = false;
   console.log(`Yield mode: ${enabled ? 'ON' : 'OFF'}`);
 }
 
@@ -32,11 +31,11 @@ export async function getByrealStatus() {
   };
 }
 
-export async function deployIdleFunds(amountSol: number, poolAddress?: string) {
+export async function deployIdleFunds(amountUsd: number, poolAddress?: string) {
   if (!yieldMode) return { success: false, error: 'Yield mode disabled' };
   if (!await byreal.isByrealAvailable()) return { success: false, error: 'Byreal CLI not available' };
 
-  console.log(`Deploying ${amountSol} SOL via Byreal...`);
+  console.log(`Deploying ${amountUsd} USD via Byreal...`);
 
   let pool = poolAddress;
   if (!pool) {
@@ -48,7 +47,7 @@ export async function deployIdleFunds(amountSol: number, poolAddress?: string) {
 
   if (!pool) return { success: false, error: 'No pool found' };
 
-  const result = await byreal.openPosition(pool, amountSol);
+  const result = await byreal.openPosition(pool, amountUsd);
   console.log(`Position opened:`, JSON.stringify(result));
   return result;
 }
@@ -70,28 +69,6 @@ export async function closeAllPositions() {
 }
 
 export async function startYieldLoop() {
-  if (!await byreal.isByrealAvailable()) {
-    console.log('Byreal CLI not available, yield loop disabled');
-    return;
-  }
-
-  console.log('Starting Byreal yield deployment loop...');
-  const loop = async () => {
-    try {
-      const balance = await byreal.getBalance();
-      const threshold = parseFloat(process.env.YIELD_THRESHOLD_SOL || '0.5');
-
-      if (balance >= threshold) {
-        console.log(`Idle SOL balance: ${balance}, deploying...`);
-        await deployIdleFunds(balance * 0.8);
-      }
-    } catch (e) {
-      console.error('Yield loop error:', e);
-    }
-
-    const interval = parseInt(process.env.YIELD_CHECK_INTERVAL || '3600000');
-    setTimeout(loop, interval);
-  };
-
-  loop();
+  // There is no verified SOL/USD conversion or budget reservation in this prototype.
+  console.log('Automatic yield allocation disabled; explicit USD budgets are required.');
 }

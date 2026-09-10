@@ -1,14 +1,11 @@
-FROM node:20-slim
-
+FROM node:22-slim
 WORKDIR /app
-
-RUN npm install -g @byreal-io/byreal-cli
-
 COPY package*.json ./
-RUN npm install --omit=dev
-
-COPY dist/ ./dist/
-COPY src/views/ ./dist/views/
-
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+COPY scripts ./scripts
+RUN npm run build && npm prune --omit=dev
+USER node
 EXPOSE 3000
-CMD ["node", "dist/index.js"]
+CMD ["npm", "start"]

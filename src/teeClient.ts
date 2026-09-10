@@ -1,7 +1,7 @@
 import { DstackClient } from '@phala/dstack-sdk';
 import { toViemAccountSecure } from '@phala/dstack-sdk/viem';
 import { createWalletClient, http, type Account } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { mantleSepoliaTestnet } from 'viem/chains';
 const mantleSepolia = mantleSepoliaTestnet;
 
@@ -20,7 +20,8 @@ export async function getTeeWallet() {
   let account: Account;
 
   if (process.env.DEV_MODE === 'true') {
-    const pk = generatePrivateKey();
+    const pk = process.env.DEV_PRIVATE_KEY as `0x${string}` | undefined;
+    if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) throw new Error('DEV_MODE requires a persistent DEV_PRIVATE_KEY');
     account = privateKeyToAccount(pk);
     console.log(`\u{1F511} Dev wallet: ${account.address} (DEV_MODE)`);
   } else {
@@ -44,3 +45,4 @@ export async function getAgentAddress(): Promise<string> {
   const { account } = await getTeeWallet();
   return account.address;
 }
+
